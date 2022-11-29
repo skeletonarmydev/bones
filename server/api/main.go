@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
+	github "bones/server/handlers/github"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/hashicorp/terraform-exec/tfexec"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -74,47 +74,27 @@ func main() {
 		Article{Id: "2", Title: "Hello 2", Desc: "Article Description", Content: "Article Content"},
 	}
 
-	workingDir := os.Getenv("TERRAFORM_FILES_DIR")
-	execPath := os.Getenv("TERRAFORM_EXEC_DIR")
+	var help = flag.Bool("help", false, "Show help")
+	var createAction = flag.Bool("create", false, "create")
+	var destroyAction = flag.Bool("destroy", false, "destroy")
+	var repoFlag = ""
+	var appName = ""
 
-	tf, err := tfexec.NewTerraform(workingDir, execPath)
-	if err != nil {
-		log.Fatalf("error running NewTerraform: %s", err)
+	flag.StringVar(&repoFlag, "repo", "", "The repo of the scaffold template")
+	flag.StringVar(&appName, "name", "", "The name of your new app")
+
+	// Parse the flag
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
 	}
 
-	err = tf.Init(context.Background())
-	if err != nil {
-		log.Fatalf("error running Init: %s", err)
-	}
-
-	pass, err := tf.Plan(context.Background(), tfexec.Out(workingDir+"/out.plan"))
-	if err != nil {
-		log.Fatalf("error running Plan: %s", err)
-	}
-
-	if pass {
-		plan, err := tf.ShowPlanFile(context.Background(), workingDir+"/out.plan")
-		if err != nil {
-			log.Fatalf("error running fetch plan: %s", err)
-		}
-
-		for _, s := range plan.ResourceChanges {
-			fmt.Printf("Change: %s %s\n", s.Change.Actions, s.Name)
-		}
-
-		fmt.Println("Applying changes")
-		err2 := tf.Apply(context.Background())
-
-		if err2 != nil {
-			log.Fatalf("error running apply: %s", err2)
-		}
-
-	} else {
-		fmt.Println("Destroying changes")
-		err := tf.Destroy(context.Background())
-		if err != nil {
-			log.Fatalf("error running destroy: %s", err)
-		}
+	if *createAction {
+		github.CreateRepo(appName, repoFlag)
+	} else if *destroyAction {
+		github.DestroyRepo(appName)
 	}
 
 	//handleRequests()
