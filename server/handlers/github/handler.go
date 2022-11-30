@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"bones/server/common"
 	"context"
 	"fmt"
-	"github.com/go-git/go-git"
-	"github.com/go-git/go-git/plumbing/object"
-	http2 "github.com/go-git/go-git/plumbing/transport/http"
+	"github.com/bones/server/common"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	http2 "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hc-install/product"
 	"github.com/hashicorp/hc-install/releases"
