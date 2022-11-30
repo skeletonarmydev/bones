@@ -97,5 +97,5 @@ func main() {
 		github.DestroyRepo(appName)
 	}
 
-	//handleRequests()
+	handleRequests()
 }
