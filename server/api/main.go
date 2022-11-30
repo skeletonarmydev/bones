@@ -1,11 +1,11 @@
 package main
 
 import (
-	github "bones/server/handlers/github"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
+	github "github.com/skeletonarmydev/bones/server/handlers/github"
 	"io/ioutil"
 	"log"
 	"net/http"
