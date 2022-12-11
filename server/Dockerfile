@@ -14,5 +14,12 @@ RUN export GO111MODULE=on && go get . && go build -o /bin/bones-server
 FROM golang:1.19-alpine
 #Copy the build's output binary from the previous build container
 COPY --from=build /bin/bones-server /bin/bones-server
+
+#Copy terraform files
+COPY --from=build $GOPATH/src/github.com/skeletondev/bones/server/handlers/github/terraform /go/terraform
+
+#Install terraform
+RUN apk add terraform --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+
 ENTRYPOINT ["/bin/bones-server"]
 EXPOSE 8080

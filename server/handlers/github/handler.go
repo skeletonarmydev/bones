@@ -2,42 +2,50 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/bones/server/common"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	http2 "github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/hashicorp/go-version"
-	"github.com/hashicorp/hc-install/product"
-	"github.com/hashicorp/hc-install/releases"
 	"github.com/hashicorp/terraform-exec/tfexec"
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
 
+type GithubCreds struct {
+	GITHUB_TOKEN string
+}
+
 func getTerraformDir() (execPath string, workingDir string) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("No caller information")
-	}
+	/*
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			panic("No caller information")
+		}
+	*/
 
-	workingDir = path.Dir(filename) + "/terraform"
+	workingDir = "/go/terraform"
+	execPath = "/usr/bin/terraform"
+	/*
+		workingDir = path.Dir(filename) + "/terraform"
 
-	installer := &releases.ExactVersion{
-		Product: product.Terraform,
-		Version: version.Must(version.NewVersion("1.0.6")),
-	}
+		installer := &releases.ExactVersion{
+			Product: product.Terraform,
+			Version: version.Must(version.NewVersion("1.0.6")),
+		}
 
-	execPath, err := installer.Install(context.Background())
-	if err != nil {
-		log.Fatalf("error installing Terraform: %s", err)
-	}
+		execPath, err := installer.Install(context.Background())
+		if err != nil {
+			log.Fatalf("error installing Terraform: %s", err)
+		} else {
+			fmt.Printf("Terraform Installation successful (%s)\n", execPath)
+		}
+	*/
 
 	return execPath, workingDir
 }
@@ -45,6 +53,13 @@ func getTerraformDir() (execPath string, workingDir string) {
 func createRepo(name string) string {
 	githubUser := os.Getenv("GITHUB_USER")
 	githubToken := os.Getenv("GITHUB_TOKEN")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	if err != nil {
+		log.Fatalf("Can't parse githubToken: %s", err)
+	}
+
 	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
 	execPath, workingDir := getTerraformDir()
 
@@ -52,7 +67,7 @@ func createRepo(name string) string {
 
 	tf, err := tfexec.NewTerraform(workingDir, execPath)
 	if err != nil {
-		log.Fatalf("error running NewTerraform: %s", err)
+		log.Fatalf("error running NewTerraform: %s (execPath: %s)", err, execPath)
 	}
 
 	err = tf.Init(context.Background())
@@ -64,7 +79,7 @@ func createRepo(name string) string {
 		tfexec.Out(workingDir+"/out.plan"),
 		tfexec.Var("repo_name="+repoName),
 		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("github_token="+githubToken),
+		tfexec.Var("github_token="+githubCreds.GITHUB_TOKEN),
 	)
 	if err != nil {
 		log.Fatalf("error running Plan: %s", err)
@@ -97,6 +112,13 @@ func createRepo(name string) string {
 func destroyRepo(name string) {
 	githubUser := os.Getenv("GITHUB_USER")
 	githubToken := os.Getenv("GITHUB_TOKEN")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	if err != nil {
+		log.Fatalf("Can't parse githubToken: %s", err)
+	}
+
 	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
 	execPath, workingDir := getTerraformDir()
 
@@ -114,7 +136,7 @@ func destroyRepo(name string) {
 	err = tf.Destroy(context.Background(),
 		tfexec.Var("repo_name="+repoName),
 		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("github_token="+githubToken),
+		tfexec.Var("github_token="+githubCreds.GITHUB_TOKEN),
 	)
 	if err != nil {
 		log.Fatalf("error running destroy: %s", err)
@@ -126,6 +148,12 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 	githubEmail := common.GetConfig("GITHUB_EMAIL")
 	githubToken := common.GetConfig("GITHUB_TOKEN")
 	githubBase := common.GetConfig("GITHUB_BASE")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	if err != nil {
+		log.Fatalf("Can't parse githubToken: %s", err)
+	}
 
 	repoName := createRepo(appName)
 	repoUrl := githubBase + "/" + repoName
@@ -143,7 +171,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
 			Username: githubUser,
-			Password: githubToken,
+			Password: githubCreds.GITHUB_TOKEN,
 		},
 	})
 	common.CheckIfError(err)
@@ -155,7 +183,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
 			Username: githubUser,
-			Password: githubToken,
+			Password: githubCreds.GITHUB_TOKEN,
 		},
 	})
 	common.CheckIfError(err)
@@ -203,7 +231,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 
 	fmt.Println(obj)
 
-	err = r.Push(&git.PushOptions{Auth: &http2.BasicAuth{Username: githubUser, Password: githubToken}})
+	err = r.Push(&git.PushOptions{Auth: &http2.BasicAuth{Username: githubUser, Password: githubCreds.GITHUB_TOKEN}})
 	common.CheckIfError(err)
 
 	os.Chdir(curDir)
