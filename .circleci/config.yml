@@ -35,8 +35,6 @@ workflows:
   build_and_push_image:
     jobs:
       - aws-ecr/build-and-push-image:
-          region: us-east-1
-          account-url: ${AWS_ECR_ACCOUNT_URL}
           repo: skeletonarmy
           tag: 0.1.${CIRCLE_BUILD_NUM}
           path: server
