@@ -136,6 +136,12 @@ func returnAllProjectTypes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ProjectTypes)
 }
 
+func returnHealth(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnHealth")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode("Alive")
+}
+
 func createNewProjectType(w http.ResponseWriter, r *http.Request) {
 	var projectType ProjectType
 
@@ -183,6 +189,7 @@ func handleRequests() {
 
 	myRouter := mux.NewRouter().StrictSlash(true)
 
+	myRouter.HandleFunc("/", returnHealth)
 	myRouter.HandleFunc("/project", returnAllProjects).Methods("GET")
 	myRouter.HandleFunc("/project", createNewProject).Methods("POST")
 	myRouter.HandleFunc("/project", deleteProject).Methods("DELETE")
