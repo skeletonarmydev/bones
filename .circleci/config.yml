@@ -32,9 +32,9 @@ jobs:
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
-  build-push-image:
+  build_and_push_image:
     jobs:
-      - aws-ecr/build_and_push_image:
+      - aws-ecr/build-and-push-image:
           region: us-east-1
           account-url: ${AWS_ECR_ACCOUNT_URL}
           repo: skeletonarmy
