@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	github "github.com/bones/server/handlers/github"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -23,56 +23,93 @@ var banner = `
 Scaffolding service
 `
 
-type Article struct {
-	Id      string `json:"Id"`
-	Title   string `json:"Title"`
-	Desc    string `json:"desc"`
-	Content string `json:"content"`
+type Project struct {
+	Id   string `json:"Id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Desc string `json:"desc"`
+	Repo string `json:"repo"`
 }
 
-var Articles []Article
+type ProjectCreateRequest struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+}
 
-func returnAllArticles(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllArticles")
+type ProjectDeleteRequest struct {
+	Id string `json:"Id"`
+}
+
+var Projects = make(map[string]Project)
+
+func returnAllProjects(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnAllProjects")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(Articles)
+	json.NewEncoder(w).Encode(Projects)
 }
 
-func createNewArticle(w http.ResponseWriter, r *http.Request) {
-	// get the body of our POST request
-	// unmarshal this into a new Article struct
-	// append this to our Articles array.
-	reqBody, _ := ioutil.ReadAll(r.Body)
-	var article Article
-	json.Unmarshal(reqBody, &article)
-	// update our global Articles array to include
-	// our new Article
-	Articles = append(Articles, article)
+func createNewProject(w http.ResponseWriter, r *http.Request) {
 
-	json.NewEncoder(w).Encode(article)
+	var projectRequest ProjectCreateRequest
+	err := json.NewDecoder(r.Body).Decode(&projectRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var project Project
+
+	id := uuid.New()
+	project.Id = id.String()
+	project.Name = projectRequest.Name
+	project.Type = projectRequest.Type
+	project.Desc = projectRequest.Desc
+
+	go func() {
+		repoUrl := github.CreateRepo(project.Name, "https://github.com/ascii27/skeletons")
+
+		project.Repo = repoUrl
+
+		Projects[id.String()] = project
+	}()
+
+	json.NewEncoder(w).Encode(project)
+}
+
+func deleteProject(w http.ResponseWriter, r *http.Request) {
+
+	var projectRequest ProjectDeleteRequest
+	err := json.NewDecoder(r.Body).Decode(&projectRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	project := Projects[projectRequest.Id]
+
+	go github.DestroyRepo(project.Name)
+
+	delete(Projects, projectRequest.Id)
+
+	json.NewEncoder(w).Encode(project)
 }
 
 func handleRequests() {
-	fmt.Printf(banner)
 
-	// creates a new instance of a mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
 
-	myRouter.HandleFunc("/all", returnAllArticles)
-	myRouter.HandleFunc("/article", createNewArticle).Methods("POST")
-	// finally, instead of passing in nil, we want
-	// to pass in our newly created router as the second
-	// argument
+	myRouter.HandleFunc("/all", returnAllProjects)
+	myRouter.HandleFunc("/project", createNewProject).Methods("POST")
+	myRouter.HandleFunc("/project", deleteProject).Methods("DELETE")
+
 	fmt.Println("Now online and ready")
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 
 }
 
 func main() {
-	Articles = []Article{
-		Article{Id: "1", Title: "Hello", Desc: "Article Description", Content: "Article Content"},
-		Article{Id: "2", Title: "Hello 2", Desc: "Article Description", Content: "Article Content"},
-	}
+	fmt.Printf(banner)
 
 	var help = flag.Bool("help", false, "Show help")
 	var createAction = flag.Bool("create", false, "create")

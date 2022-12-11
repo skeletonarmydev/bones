@@ -8,7 +8,10 @@ replace github.com/bones/server/handlers/github v0.0.0 => ./handlers/github
 
 replace github.com/bones/server/common v0.0.0 => ./common
 
-require github.com/gorilla/mux v1.8.0
+require (
+	github.com/google/uuid v1.3.0
+	github.com/gorilla/mux v1.8.0
+)
 
 require (
 	github.com/Microsoft/go-winio v0.4.16 // indirect

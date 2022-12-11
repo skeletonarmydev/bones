@@ -42,7 +42,7 @@ func getTerraformDir() (execPath string, workingDir string) {
 	return execPath, workingDir
 }
 
-func createRepo(name string) {
+func createRepo(name string) string {
 	githubUser := os.Getenv("GITHUB_USER")
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
@@ -90,6 +90,8 @@ func createRepo(name string) {
 		os.Remove(workingDir + "/out.plan")
 
 	}
+
+	return repoName
 }
 
 func destroyRepo(name string) {
@@ -119,13 +121,15 @@ func destroyRepo(name string) {
 	}
 }
 
-func CreateRepo(appName string, repoFlag string) {
+func CreateRepo(appName string, repoFlag string) string {
 	githubUser := common.GetConfig("GITHUB_USER")
 	githubEmail := common.GetConfig("GITHUB_EMAIL")
 	githubToken := common.GetConfig("GITHUB_TOKEN")
 	githubBase := common.GetConfig("GITHUB_BASE")
 
-	createRepo(appName)
+	repoName := createRepo(appName)
+	repoUrl := githubBase + "/" + repoName
+
 	skeletonDir, err := ioutil.TempDir("", "skeleton")
 	common.CheckIfError(err)
 	defer os.RemoveAll(skeletonDir)
@@ -144,10 +148,10 @@ func CreateRepo(appName string, repoFlag string) {
 	})
 	common.CheckIfError(err)
 
-	repoName := strings.ReplaceAll(strings.ToLower(appName), " ", "-")
+	//repoName := strings.ReplaceAll(strings.ToLower(appName), " ", "-")
 
 	_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
-		URL:      githubBase + "/" + repoName,
+		URL:      repoUrl,
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
 			Username: githubUser,
@@ -203,6 +207,8 @@ func CreateRepo(appName string, repoFlag string) {
 	common.CheckIfError(err)
 
 	os.Chdir(curDir)
+
+	return repoUrl
 }
 
 func DestroyRepo(appName string) {
