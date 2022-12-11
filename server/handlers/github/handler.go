@@ -121,7 +121,7 @@ func destroyRepo(name string) {
 	}
 }
 
-func CreateRepo(appName string, repoFlag string) string {
+func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) string {
 	githubUser := common.GetConfig("GITHUB_USER")
 	githubEmail := common.GetConfig("GITHUB_EMAIL")
 	githubToken := common.GetConfig("GITHUB_TOKEN")
@@ -139,7 +139,7 @@ func CreateRepo(appName string, repoFlag string) string {
 	defer os.RemoveAll(repoDir)
 
 	_, err = git.PlainClone(skeletonDir, false, &git.CloneOptions{
-		URL:      repoFlag,
+		URL:      skeletonRepo,
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
 			Username: githubUser,
@@ -166,7 +166,7 @@ func CreateRepo(appName string, repoFlag string) string {
 	w, err := r.Worktree()
 	common.CheckIfError(err)
 
-	err = common.Dir(skeletonDir+"/go-app", repoDir)
+	err = common.Dir(skeletonDir+skeletonRepoPath, repoDir)
 	common.CheckIfError(err)
 
 	curDir, err := os.Getwd()

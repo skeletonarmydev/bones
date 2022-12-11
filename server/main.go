@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 var banner = `
@@ -31,6 +32,14 @@ type Project struct {
 	Repo string `json:"repo"`
 }
 
+type ProjectType struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+	Repo string `json:"repo"`
+	Path string `json:"path"`
+}
+
 type ProjectCreateRequest struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
@@ -41,7 +50,20 @@ type ProjectDeleteRequest struct {
 	Id string `json:"Id"`
 }
 
+type ProjectTypeCreateRequest struct {
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+	Repo string `json:"repo"`
+	Path string `json:"path"`
+}
+
+type ProjectTypeDeleteRequest struct {
+	Slug string `json:"slug"`
+}
+
+//Globals
 var Projects = make(map[string]Project)
+var ProjectTypes = make(map[string]ProjectType)
 
 func returnAllProjects(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: returnAllProjects")
@@ -58,6 +80,12 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectType, ok := ProjectTypes[projectRequest.Type]
+	if !ok {
+		http.Error(w, "Project Type Not Found", http.StatusNotFound)
+		return
+	}
+
 	var project Project
 
 	id := uuid.New()
@@ -67,13 +95,15 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 	project.Desc = projectRequest.Desc
 
 	go func() {
-		repoUrl := github.CreateRepo(project.Name, "https://github.com/ascii27/skeletons")
+		repoUrl := github.CreateRepo(project.Name, projectType.Repo, projectType.Path)
 
 		project.Repo = repoUrl
-
 		Projects[id.String()] = project
 	}()
 
+	Projects[id.String()] = project
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(project)
 }
 
@@ -86,22 +116,80 @@ func deleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project := Projects[projectRequest.Id]
+	project, ok := Projects[projectRequest.Id]
+	if !ok {
+		http.Error(w, "Project Not Found", http.StatusNotFound)
+		return
+	}
 
 	go github.DestroyRepo(project.Name)
 
 	delete(Projects, projectRequest.Id)
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(project)
+}
+
+func returnAllProjectTypes(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnAllProjectTypes")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ProjectTypes)
+}
+
+func createNewProjectType(w http.ResponseWriter, r *http.Request) {
+	var projectType ProjectType
+
+	var projectTypeRequest ProjectTypeCreateRequest
+	err := json.NewDecoder(r.Body).Decode(&projectTypeRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	projectType.Name = projectTypeRequest.Name
+	projectType.Desc = projectTypeRequest.Desc
+	projectType.Repo = projectTypeRequest.Repo
+	projectType.Path = projectTypeRequest.Path
+	projectType.Slug = strings.ReplaceAll(strings.ToLower(projectType.Name), " ", "-")
+
+	ProjectTypes[projectType.Slug] = projectType
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(projectType)
+}
+
+func deleteProjectType(w http.ResponseWriter, r *http.Request) {
+
+	var projectTypeRequest ProjectTypeDeleteRequest
+	err := json.NewDecoder(r.Body).Decode(&projectTypeRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	projectType, ok := ProjectTypes[projectTypeRequest.Slug]
+	if !ok {
+		http.Error(w, "Project Type Not Found", http.StatusNotFound)
+		return
+	}
+
+	delete(ProjectTypes, projectTypeRequest.Slug)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(projectType)
 }
 
 func handleRequests() {
 
 	myRouter := mux.NewRouter().StrictSlash(true)
 
-	myRouter.HandleFunc("/all", returnAllProjects)
+	myRouter.HandleFunc("/project", returnAllProjects).Methods("GET")
 	myRouter.HandleFunc("/project", createNewProject).Methods("POST")
 	myRouter.HandleFunc("/project", deleteProject).Methods("DELETE")
+
+	myRouter.HandleFunc("/type", returnAllProjectTypes).Methods("GET")
+	myRouter.HandleFunc("/type", createNewProjectType).Methods("POST")
+	myRouter.HandleFunc("/type", deleteProjectType).Methods("DELETE")
 
 	fmt.Println("Now online and ready")
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
@@ -112,13 +200,6 @@ func main() {
 	fmt.Printf(banner)
 
 	var help = flag.Bool("help", false, "Show help")
-	var createAction = flag.Bool("create", false, "create")
-	var destroyAction = flag.Bool("destroy", false, "destroy")
-	var repoFlag = ""
-	var appName = ""
-
-	flag.StringVar(&repoFlag, "repo", "", "The repo of the scaffold template")
-	flag.StringVar(&appName, "name", "", "The name of your new app")
 
 	// Parse the flag
 	flag.Parse()
@@ -126,12 +207,6 @@ func main() {
 	if *help {
 		flag.Usage()
 		os.Exit(0)
-	}
-
-	if *createAction {
-		github.CreateRepo(appName, repoFlag)
-	} else if *destroyAction {
-		github.DestroyRepo(appName)
 	}
 
 	handleRequests()
