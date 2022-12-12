@@ -21,7 +21,7 @@ var banner = `
 | |_) | (_) | | | |  __/\__ \
 |____/ \___/|_| |_|\___||___/
                              
-Scaffolding service
+Your skeleton scaffolding service
 `
 
 type Project struct {
