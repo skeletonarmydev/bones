@@ -24,10 +24,6 @@ jobs:
             echo 'export TAG=0.1.${CIRCLE_BUILD_NUM}' >> $BASH_ENV
       - setup_remote_docker:
           docker_layer_caching: true
-      - run:
-          name: Docker Build Server
-          command: |
-            docker build --tag 268213776880.dkr.ecr.us-east-1.amazonaws.com/skeletonarmy:$TAG server
             
 
 # Invoke jobs via workflows
@@ -39,10 +35,10 @@ workflows:
           repo: skeletonarmy
           tag: 0.1.${CIRCLE_BUILD_NUM}
           path: server
-      - aws-ecs/deploy-service-update:
-          cluster: 'bones'
-          container-image-name-updates: 'container=bones-server,tag=0.1.${CIRCLE_BUILD_NUM}'
-          family: 'bones-server'
-          service-name: 'bones-service'
-          requires:
-            - aws-ecr/build-and-push-image
+#      - aws-ecs/deploy-service-update:
+#          cluster: 'bones'
+#          container-image-name-updates: 'container=bones-server,tag=0.1.${CIRCLE_BUILD_NUM}'
+#          family: 'bones-server'
+#          service-name: 'bones-service'
+#          requires:
+#            - aws-ecr/build-and-push-image
