@@ -15,7 +15,7 @@ import (
 )
 
 type CircleCICreds struct {
-	token string
+	TOKEN string
 }
 
 type GithubCreds struct {
@@ -24,13 +24,16 @@ type GithubCreds struct {
 
 func getTerraformDir() (execPath string) {
 	execPath = "/usr/bin/terraform"
+	//execPath = "/usr/local/bin/terraform"
 
 	return execPath
 }
 
 func createProject(name string, workingDir string) string {
-	circleCICredsEnv := os.Getenv("CIRCLECI")
+	circleCICredsEnv := common.GetConfig("CIRCLECI")
 	githubUser := "ascii27"
+
+	fmt.Printf("CircleCI Env %s\n", circleCICredsEnv)
 
 	var circleCreds CircleCICreds
 	err := json.Unmarshal([]byte(circleCICredsEnv), &circleCreds)
@@ -53,11 +56,13 @@ func createProject(name string, workingDir string) string {
 		log.Fatalf("error running Init: %s", err)
 	}
 
+	fmt.Printf("CircleCI Token %s\n", circleCreds.TOKEN)
+
 	pass, err := tf.Plan(context.Background(),
 		tfexec.Out(workingDir+"/out.plan"),
 		tfexec.Var("project_name="+projectName),
 		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("circleci_token="+circleCreds.token),
+		tfexec.Var("circleci_token="+circleCreds.TOKEN),
 	)
 	if err != nil {
 		log.Fatalf("error running Plan: %s", err)
@@ -88,7 +93,7 @@ func createProject(name string, workingDir string) string {
 }
 
 func destroyProject(name string, workingDir string) {
-	circleCICredsEnv := os.Getenv("CIRCLECI")
+	circleCICredsEnv := common.GetConfig("CIRCLECI")
 	githubUser := "ascii27"
 
 	var circleCreds CircleCICreds
@@ -114,7 +119,7 @@ func destroyProject(name string, workingDir string) {
 	err = tf.Destroy(context.Background(),
 		tfexec.Var("project_name="+projectName),
 		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("circleci_token="+circleCreds.token),
+		tfexec.Var("circleci_token="+circleCreds.TOKEN),
 	)
 	if err != nil {
 		log.Fatalf("error running destroy: %s", err)

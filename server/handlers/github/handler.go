@@ -22,30 +22,19 @@ type GithubCreds struct {
 }
 
 func getTerraformDir() (execPath string, workingDir string) {
+
 	/*
 		_, filename, _, ok := runtime.Caller(0)
 		if !ok {
 			panic("No caller information")
 		}
-	*/
 
+		workingDir = path.Dir(filename) + "/terraform"
+		execPath = "/usr/local/bin/terraform"
+
+	*/
 	workingDir = "/go/terraform"
 	execPath = "/usr/bin/terraform"
-	/*
-		workingDir = path.Dir(filename) + "/terraform"
-
-		installer := &releases.ExactVersion{
-			Product: product.Terraform,
-			Version: version.Must(version.NewVersion("1.0.6")),
-		}
-
-		execPath, err := installer.Install(context.Background())
-		if err != nil {
-			log.Fatalf("error installing Terraform: %s", err)
-		} else {
-			fmt.Printf("Terraform Installation successful (%s)\n", execPath)
-		}
-	*/
 
 	return execPath, workingDir
 }
