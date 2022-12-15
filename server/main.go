@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	circleci "github.com/bones/server/handlers/circleci"
 	github "github.com/bones/server/handlers/github"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -101,6 +102,8 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 		Projects[id.String()] = project
 	}()
 
+	go circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
+
 	Projects[id.String()] = project
 
 	w.Header().Set("Content-Type", "application/json")
@@ -122,7 +125,14 @@ func deleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectType, ok := ProjectTypes[project.Type]
+	if !ok {
+		http.Error(w, "Project Type Not Found", http.StatusNotFound)
+		return
+	}
+
 	go github.DestroyRepo(project.Name)
+	go circleci.DestroyProject(project.Name, projectType.Repo, projectType.Path)
 
 	delete(Projects, projectRequest.Id)
 
