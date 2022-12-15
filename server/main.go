@@ -100,9 +100,9 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 
 		project.Repo = repoUrl
 		Projects[id.String()] = project
-	}()
 
-	go circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
+		circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
+	}()
 
 	Projects[id.String()] = project
 

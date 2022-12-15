@@ -33,8 +33,6 @@ func createProject(name string, workingDir string) string {
 	circleCICredsEnv := common.GetConfig("CIRCLECI")
 	githubUser := "ascii27"
 
-	fmt.Printf("CircleCI Env %s\n", circleCICredsEnv)
-
 	var circleCreds CircleCICreds
 	err := json.Unmarshal([]byte(circleCICredsEnv), &circleCreds)
 	if err != nil {
@@ -55,8 +53,6 @@ func createProject(name string, workingDir string) string {
 	if err != nil {
 		log.Fatalf("error running Init: %s", err)
 	}
-
-	fmt.Printf("CircleCI Token %s\n", circleCreds.TOKEN)
 
 	pass, err := tf.Plan(context.Background(),
 		tfexec.Out(workingDir+"/out.plan"),
@@ -136,14 +132,6 @@ func CreateProject(appName string, skeletonRepo string, skeletonRepoPath string)
 		log.Fatalf("Can't parse githubToken: %s", err)
 	}
 
-	circleCICredsEnv := common.GetConfig("CIRCLECI")
-
-	var circleCreds CircleCICreds
-	err = json.Unmarshal([]byte(circleCICredsEnv), &circleCreds)
-	if err != nil {
-		log.Fatalf("Can't parse circleCreds: %s (Cred: %s)", err, circleCICredsEnv)
-	}
-
 	skeletonDir, err := ioutil.TempDir("", "skeleton")
 	common.CheckIfError(err)
 	defer os.RemoveAll(skeletonDir)
@@ -171,14 +159,6 @@ func DestroyProject(appName string, skeletonRepo string, skeletonRepoPath string
 	err := json.Unmarshal([]byte(githubToken), &githubCreds)
 	if err != nil {
 		log.Fatalf("Can't parse githubToken: %s", err)
-	}
-
-	circleCICredsEnv := os.Getenv("CIRCLECI")
-
-	var circleCreds CircleCICreds
-	err = json.Unmarshal([]byte(circleCICredsEnv), &circleCreds)
-	if err != nil {
-		log.Fatalf("Can't parse circleCreds: %s", err)
 	}
 
 	skeletonDir, err := ioutil.TempDir("", "skeleton")
