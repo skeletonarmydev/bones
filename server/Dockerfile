@@ -8,6 +8,8 @@ WORKDIR $GOPATH/src/github.com/skeletondev/bones/server
 # Copy everything from the current directory to the PWD (Present Working Directory) inside the container
 COPY . .
 
+ENV CGO_ENABLED=0
+
 # Build the project and send the output to /bin/bones-server
 RUN export GO111MODULE=on && go get . && go build -o /bin/bones-server
 
