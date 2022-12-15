@@ -136,12 +136,12 @@ func CreateProject(appName string, skeletonRepo string, skeletonRepoPath string)
 		log.Fatalf("Can't parse githubToken: %s", err)
 	}
 
-	circleCICredsEnv := os.Getenv("CIRCLECI")
+	circleCICredsEnv := common.GetConfig("CIRCLECI")
 
 	var circleCreds CircleCICreds
 	err = json.Unmarshal([]byte(circleCICredsEnv), &circleCreds)
 	if err != nil {
-		log.Fatalf("Can't parse circleCreds: %s", err)
+		log.Fatalf("Can't parse circleCreds: %s (Cred: %s)", err, circleCICredsEnv)
 	}
 
 	skeletonDir, err := ioutil.TempDir("", "skeleton")
