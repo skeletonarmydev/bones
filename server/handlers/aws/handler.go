@@ -32,7 +32,7 @@ func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) e
 	}
 
 	appName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	fmt.Printf("Apply Infra: %s\n", appName)
+	fmt.Printf("Create AWS Infra: %s\n", appName)
 
 	vars := make(map[string]string)
 	vars["vpc_id"] = "vpc-c92c8baf"
@@ -63,7 +63,7 @@ func DestroyAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) 
 	}
 	appName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
 
-	fmt.Printf("Destroy Infra: %s\n", appName)
+	fmt.Printf("Destroy AWS Infra: %s\n", appName)
 
 	vars := make(map[string]string)
 	vars["vpc_id"] = "vpc-c92c8baf"
