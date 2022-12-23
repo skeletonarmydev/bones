@@ -130,7 +130,7 @@ func runApplyTerraform(workingDir string, vars map[string]string, statefileDir s
 		tfexec.BackendConfig("region=us-east-1"),
 		tfexec.BackendConfig("bucket=bones-server"),
 		tfexec.BackendConfig("encrypt=true"),
-		tfexec.BackendConfig("key="+statefileDir+"/terraform.tfstate"),
+		tfexec.BackendConfig("key=statefiles/"+statefileDir+"/terraform.tfstate"),
 		tfexec.BackendConfig("access_key="+awsCreds.AWS_ACCESS_KEY),
 		tfexec.BackendConfig("secret_key="+awsCreds.AWS_SECRET_KEY),
 	)
@@ -201,7 +201,7 @@ func runDestroyTerraform(workingDir string, vars map[string]string, statefileDir
 		tfexec.BackendConfig("region=us-east-1"),
 		tfexec.BackendConfig("bucket=bones-server"),
 		tfexec.BackendConfig("encrypt=true"),
-		tfexec.BackendConfig("key="+statefileDir+"/terraform.tfstate"),
+		tfexec.BackendConfig("key=statefiles/"+statefileDir+"/terraform.tfstate"),
 		tfexec.BackendConfig("access_key="+awsCreds.AWS_ACCESS_KEY),
 		tfexec.BackendConfig("secret_key="+awsCreds.AWS_SECRET_KEY),
 	)
