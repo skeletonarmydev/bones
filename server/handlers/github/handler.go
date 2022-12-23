@@ -7,7 +7,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	http2 "github.com/go-git/go-git/v5/plumbing/transport/http"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -53,7 +52,7 @@ func createRepo(name string) string {
 	vars["github_user"] = githubCreds.GITHUB_USER
 	vars["github_token"] = githubCreds.GITHUB_TOKEN
 
-	err = common.ExecuteTerraform(getWorkingDir(), vars, common.ApplyAction)
+	err = common.ExecuteTerraform(getWorkingDir(), vars, common.ApplyAction, repoName+"/infra/github")
 	common.CheckIfError(err)
 
 	return repoName
@@ -75,7 +74,7 @@ func destroyRepo(name string) {
 	vars["github_user"] = githubCreds.GITHUB_USER
 	vars["github_token"] = githubCreds.GITHUB_TOKEN
 
-	err = common.ExecuteTerraform(getWorkingDir(), vars, common.DestroyAction)
+	err = common.ExecuteTerraform(getWorkingDir(), vars, common.DestroyAction, repoName+"/infra/github")
 	common.CheckIfError(err)
 }
 
@@ -88,7 +87,7 @@ func DownloadRepo(repo string) string {
 		log.Fatalf("Can't parse github environment: %s", err)
 	}
 
-	tempDir, err := ioutil.TempDir("", "repo")
+	tempDir, err := os.MkdirTemp("", "repo")
 	common.CheckIfError(err)
 
 	_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
@@ -116,11 +115,11 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 	repoName := createRepo(appName)
 	repoUrl := githubCreds.GITHUB_BASE + "/" + repoName
 
-	skeletonDir, err := ioutil.TempDir("", "skeleton")
+	skeletonDir, err := os.MkdirTemp("", "skeleton")
 	common.CheckIfError(err)
 	defer os.RemoveAll(skeletonDir)
 
-	repoDir, err := ioutil.TempDir("", "repo")
+	repoDir, err := os.MkdirTemp("", "repo")
 	common.CheckIfError(err)
 	defer os.RemoveAll(repoDir)
 

@@ -41,7 +41,7 @@ func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) e
 	vars["aws_access_key"] = awsCreds.AWS_ACCESS_KEY
 	vars["aws_secret_key"] = awsCreds.AWS_SECRET_KEY
 
-	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction)
+	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, appName+"/infra/aws-ecs")
 
 	return err
 }
@@ -72,6 +72,6 @@ func DestroyAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) 
 	vars["aws_access_key"] = awsCreds.AWS_ACCESS_KEY
 	vars["aws_secret_key"] = awsCreds.AWS_SECRET_KEY
 
-	err = common.ExecuteTerraform(workingDir, vars, common.DestroyAction)
+	err = common.ExecuteTerraform(workingDir, vars, common.DestroyAction, appName+"/infra/aws-ecs")
 	return err
 }

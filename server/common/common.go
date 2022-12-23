@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/terraform-exec/tfexec"
 	"io"
@@ -18,6 +19,12 @@ const (
 	ApplyAction                   = 1
 	DestroyAction                 = 2
 )
+
+type AWSCreds struct {
+	AWS_REGION     string
+	AWS_ACCESS_KEY string
+	AWS_SECRET_KEY string
+}
 
 func getTerraformDir() (execPath string) {
 
@@ -99,8 +106,17 @@ func GetConfig(key string) (value string) {
 	return os.Getenv(key)
 }
 
-func runApplyTerraform(workingDir string, vars map[string]string) error {
+func runApplyTerraform(workingDir string, vars map[string]string, statefileDir string) error {
 	execPath := getTerraformDir()
+
+	awsCredsEnv := GetConfig("AWS")
+
+	var awsCreds AWSCreds
+	err := json.Unmarshal([]byte(awsCredsEnv), &awsCreds)
+	if err != nil {
+		fmt.Printf("Can't parse awsCreds: %s", err)
+		return err
+	}
 
 	os.Remove(workingDir + "/out.plan")
 
@@ -110,11 +126,20 @@ func runApplyTerraform(workingDir string, vars map[string]string) error {
 		return err
 	}
 
-	err = tf.Init(context.Background())
+	err = tf.Init(context.Background(),
+		tfexec.BackendConfig("region=us-east-1"),
+		tfexec.BackendConfig("bucket=bones-server"),
+		tfexec.BackendConfig("encrypt=true"),
+		tfexec.BackendConfig("key="+statefileDir+"/terraform.tfstate"),
+		tfexec.BackendConfig("access_key="+awsCreds.AWS_ACCESS_KEY),
+		tfexec.BackendConfig("secret_key="+awsCreds.AWS_SECRET_KEY),
+	)
 	if err != nil {
 		fmt.Printf("error running Init: %s", err)
 		return err
 	}
+
+	os.MkdirAll("/tmp/"+statefileDir, 0777)
 
 	// Convert map to slice of keys.
 	var tfvars = []tfexec.PlanOption{tfexec.Out(workingDir + "/out.plan")}
@@ -153,7 +178,7 @@ func runApplyTerraform(workingDir string, vars map[string]string) error {
 	return nil
 }
 
-func runDestroyTerraform(workingDir string, vars map[string]string) error {
+func runDestroyTerraform(workingDir string, vars map[string]string, statefileDir string) error {
 	execPath := getTerraformDir()
 
 	tf, err := tfexec.NewTerraform(workingDir, execPath)
@@ -162,7 +187,24 @@ func runDestroyTerraform(workingDir string, vars map[string]string) error {
 		return err
 	}
 
-	err = tf.Init(context.Background())
+	awsCredsEnv := GetConfig("AWS")
+
+	var awsCreds AWSCreds
+	err = json.Unmarshal([]byte(awsCredsEnv), &awsCreds)
+	if err != nil {
+		fmt.Printf("Can't parse awsCreds: %s", err)
+		return err
+	}
+
+	err = tf.Init(
+		context.Background(),
+		tfexec.BackendConfig("region=us-east-1"),
+		tfexec.BackendConfig("bucket=bones-server"),
+		tfexec.BackendConfig("encrypt=true"),
+		tfexec.BackendConfig("key="+statefileDir+"/terraform.tfstate"),
+		tfexec.BackendConfig("access_key="+awsCreds.AWS_ACCESS_KEY),
+		tfexec.BackendConfig("secret_key="+awsCreds.AWS_SECRET_KEY),
+	)
 	if err != nil {
 		fmt.Printf("error running Init: %s", err)
 		return err
@@ -184,14 +226,14 @@ func runDestroyTerraform(workingDir string, vars map[string]string) error {
 	return nil
 }
 
-func ExecuteTerraform(workingDir string, vars map[string]string, action TerraformAction) error {
+func ExecuteTerraform(workingDir string, vars map[string]string, action TerraformAction, statefileDir string) error {
 	switch action {
 	case PlanAction:
 		return nil
 	case ApplyAction:
-		return runApplyTerraform(workingDir, vars)
+		return runApplyTerraform(workingDir, vars, statefileDir)
 	case DestroyAction:
-		return runDestroyTerraform(workingDir, vars)
+		return runDestroyTerraform(workingDir, vars, statefileDir)
 	}
 
 	return nil

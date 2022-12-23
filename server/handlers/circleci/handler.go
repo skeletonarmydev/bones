@@ -40,7 +40,7 @@ func CreateProject(name string, skeletonRepo string, skeletonRepoPath string) er
 	vars["github_user"] = githubUser
 	vars["circleci_token"] = circleCreds.TOKEN
 
-	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction)
+	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, projectName+"/infra/circleci")
 	return err
 }
 
@@ -67,6 +67,6 @@ func DestroyProject(name string, skeletonRepo string, skeletonRepoPath string) e
 	vars["github_user"] = githubUser
 	vars["circleci_token"] = circleCreds.TOKEN
 
-	err = common.ExecuteTerraform(workingDir, vars, common.DestroyAction)
+	err = common.ExecuteTerraform(workingDir, vars, common.DestroyAction, projectName+"/infra/circleci")
 	return err
 }
