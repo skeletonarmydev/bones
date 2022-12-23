@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	aws "github.com/bones/server/handlers/aws"
 	circleci "github.com/bones/server/handlers/circleci"
 	github "github.com/bones/server/handlers/github"
 	"github.com/google/uuid"
@@ -62,7 +63,7 @@ type ProjectTypeDeleteRequest struct {
 	Slug string `json:"slug"`
 }
 
-//Globals
+// Globals
 var Projects = make(map[string]Project)
 var ProjectTypes = make(map[string]ProjectType)
 
@@ -101,6 +102,7 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 		project.Repo = repoUrl
 		Projects[id.String()] = project
 
+		aws.CreateAWSInfra(project.Name, projectType.Repo, projectType.Path)
 		circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
 	}()
 
@@ -131,8 +133,11 @@ func deleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go github.DestroyRepo(project.Name)
-	go circleci.DestroyProject(project.Name, projectType.Repo, projectType.Path)
+	go func() {
+		circleci.DestroyProject(project.Name, projectType.Repo, projectType.Path)
+		aws.DestroyAWSInfra(project.Name, projectType.Repo, projectType.Path)
+		github.DestroyRepo(project.Name)
+	}()
 
 	delete(Projects, projectRequest.Id)
 

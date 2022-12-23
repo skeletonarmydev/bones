@@ -1,151 +1,120 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/bones/server/common"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	http2 "github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/hashicorp/terraform-exec/tfexec"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
 
 type GithubCreds struct {
+	GITHUB_USER  string
 	GITHUB_TOKEN string
+	GITHUB_EMAIL string
+	GITHUB_BASE  string
 }
 
-func getTerraformDir() (execPath string, workingDir string) {
+func getWorkingDir() string {
 
-	/*
+	if common.GetConfig("SA_LOCAL") == "true" {
 		_, filename, _, ok := runtime.Caller(0)
 		if !ok {
 			panic("No caller information")
 		}
 
-		workingDir = path.Dir(filename) + "/terraform"
-		execPath = "/usr/local/bin/terraform"
-
-	*/
-	workingDir = "/go/terraform"
-	execPath = "/usr/bin/terraform"
-
-	return execPath, workingDir
+		return path.Dir(filename) + "/terraform"
+	} else {
+		return "/go/terraform"
+	}
 }
 
 func createRepo(name string) string {
-	githubUser := os.Getenv("GITHUB_USER")
-	githubToken := os.Getenv("GITHUB_TOKEN")
+	githubCredsEnv := os.Getenv("GITHUB")
 
 	var githubCreds GithubCreds
-	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
 	if err != nil {
 		log.Fatalf("Can't parse githubToken: %s", err)
 	}
-
 	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	execPath, workingDir := getTerraformDir()
 
-	fmt.Printf("Create app: %s in repo %s\n", name, repoName)
+	vars := make(map[string]string)
+	vars["repo_name"] = repoName
+	vars["github_user"] = githubCreds.GITHUB_USER
+	vars["github_token"] = githubCreds.GITHUB_TOKEN
 
-	tf, err := tfexec.NewTerraform(workingDir, execPath)
-	if err != nil {
-		log.Fatalf("error running NewTerraform: %s (execPath: %s)", err, execPath)
-	}
-
-	err = tf.Init(context.Background())
-	if err != nil {
-		log.Fatalf("error running Init: %s", err)
-	}
-
-	pass, err := tf.Plan(context.Background(),
-		tfexec.Out(workingDir+"/out.plan"),
-		tfexec.Var("repo_name="+repoName),
-		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("github_token="+githubCreds.GITHUB_TOKEN),
-	)
-	if err != nil {
-		log.Fatalf("error running Plan: %s", err)
-	}
-
-	if pass {
-		plan, err := tf.ShowPlanFile(context.Background(), workingDir+"/out.plan")
-		if err != nil {
-			log.Fatalf("error running fetch plan: %s", err)
-		}
-
-		for _, s := range plan.ResourceChanges {
-			fmt.Printf("Change: %s %s\n", s.Change.Actions, s.Name)
-		}
-
-		fmt.Println("Applying changes")
-		err2 := tf.Apply(context.Background(), tfexec.DirOrPlan(workingDir+"/out.plan"))
-
-		if err2 != nil {
-			log.Fatalf("error running apply: %s", err2)
-		}
-
-		os.Remove(workingDir + "/out.plan")
-
-	}
+	err = common.ExecuteTerraform(getWorkingDir(), vars, common.ApplyAction)
+	common.CheckIfError(err)
 
 	return repoName
 }
 
 func destroyRepo(name string) {
-	githubUser := os.Getenv("GITHUB_USER")
-	githubToken := os.Getenv("GITHUB_TOKEN")
+	githubCredsEnv := os.Getenv("GITHUB")
 
 	var githubCreds GithubCreds
-	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
 	if err != nil {
-		log.Fatalf("Can't parse githubToken: %s", err)
+		log.Fatalf("Can't parse github environment: %s", err)
 	}
 
 	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	execPath, workingDir := getTerraformDir()
 
-	tf, err := tfexec.NewTerraform(workingDir, execPath)
+	vars := make(map[string]string)
+	vars["repo_name"] = repoName
+	vars["github_user"] = githubCreds.GITHUB_USER
+	vars["github_token"] = githubCreds.GITHUB_TOKEN
+
+	err = common.ExecuteTerraform(getWorkingDir(), vars, common.DestroyAction)
+	common.CheckIfError(err)
+}
+
+func DownloadRepo(repo string) string {
+	githubCredsEnv := os.Getenv("GITHUB")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
 	if err != nil {
-		log.Fatalf("error running NewTerraform: %s", err)
+		log.Fatalf("Can't parse github environment: %s", err)
 	}
 
-	err = tf.Init(context.Background())
-	if err != nil {
-		log.Fatalf("error running Init: %s", err)
-	}
+	tempDir, err := ioutil.TempDir("", "repo")
+	common.CheckIfError(err)
 
-	fmt.Println("Destroying changes: " + repoName)
-	err = tf.Destroy(context.Background(),
-		tfexec.Var("repo_name="+repoName),
-		tfexec.Var("github_user="+githubUser),
-		tfexec.Var("github_token="+githubCreds.GITHUB_TOKEN),
-	)
-	if err != nil {
-		log.Fatalf("error running destroy: %s", err)
-	}
+	_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
+		URL:      repo,
+		Progress: os.Stdout,
+		Auth: &http2.BasicAuth{
+			Username: githubCreds.GITHUB_USER,
+			Password: githubCreds.GITHUB_TOKEN,
+		},
+	})
+	common.CheckIfError(err)
+
+	return tempDir
 }
 
 func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) string {
-	githubUser := common.GetConfig("GITHUB_USER")
-	githubEmail := common.GetConfig("GITHUB_EMAIL")
-	githubToken := common.GetConfig("GITHUB_TOKEN")
-	githubBase := common.GetConfig("GITHUB_BASE")
+	githubCredsEnv := os.Getenv("GITHUB")
 
 	var githubCreds GithubCreds
-	err := json.Unmarshal([]byte(githubToken), &githubCreds)
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
 	if err != nil {
 		log.Fatalf("Can't parse githubToken: %s", err)
 	}
 
 	repoName := createRepo(appName)
-	repoUrl := githubBase + "/" + repoName
+	repoUrl := githubCreds.GITHUB_BASE + "/" + repoName
 
 	skeletonDir, err := ioutil.TempDir("", "skeleton")
 	common.CheckIfError(err)
@@ -159,7 +128,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 		URL:      skeletonRepo,
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
-			Username: githubUser,
+			Username: githubCreds.GITHUB_USER,
 			Password: githubCreds.GITHUB_TOKEN,
 		},
 	})
@@ -171,7 +140,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 		URL:      repoUrl,
 		Progress: os.Stdout,
 		Auth: &http2.BasicAuth{
-			Username: githubUser,
+			Username: githubCreds.GITHUB_USER,
 			Password: githubCreds.GITHUB_TOKEN,
 		},
 	})
@@ -209,8 +178,8 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 
 	commit, err := w.Commit("Initial Commit", &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  githubUser,
-			Email: githubEmail,
+			Name:  githubCreds.GITHUB_USER,
+			Email: githubCreds.GITHUB_EMAIL,
 			When:  time.Now(),
 		},
 	})
@@ -220,7 +189,7 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 
 	fmt.Println(obj)
 
-	err = r.Push(&git.PushOptions{Auth: &http2.BasicAuth{Username: githubUser, Password: githubCreds.GITHUB_TOKEN}})
+	err = r.Push(&git.PushOptions{Auth: &http2.BasicAuth{Username: githubCreds.GITHUB_USER, Password: githubCreds.GITHUB_TOKEN}})
 	common.CheckIfError(err)
 
 	os.Chdir(curDir)

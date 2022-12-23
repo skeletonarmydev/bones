@@ -6,6 +6,7 @@ require (
 	github.com/bones/server/common v0.0.0
 	github.com/go-git/go-git/v5 v5.5.1
 	github.com/hashicorp/terraform-exec v0.17.3
+	github.com/bones/server/handlers/github v0.0.0
 )
 
 require (
@@ -34,3 +35,5 @@ require (
 )
 
 replace github.com/bones/server/common v0.0.0 => ../../common
+
+replace github.com/bones/server/handlers/github v0.0.0 => ../github

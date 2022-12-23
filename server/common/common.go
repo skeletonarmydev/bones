@@ -1,13 +1,33 @@
 package common
 
 import (
+	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-exec/tfexec"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 )
+
+type TerraformAction int64
+
+const (
+	PlanAction    TerraformAction = 0
+	ApplyAction                   = 1
+	DestroyAction                 = 2
+)
+
+func getTerraformDir() (execPath string) {
+
+	if GetConfig("SA_LOCAL") == "true" {
+		return "/usr/local/bin/terraform"
+	} else {
+		return "/usr/bin/terraform"
+	}
+
+}
 
 func CheckIfError(err error) {
 	if err != nil {
@@ -77,4 +97,102 @@ func Dir(src string, dst string) error {
 
 func GetConfig(key string) (value string) {
 	return os.Getenv(key)
+}
+
+func runApplyTerraform(workingDir string, vars map[string]string) error {
+	execPath := getTerraformDir()
+
+	os.Remove(workingDir + "/out.plan")
+
+	tf, err := tfexec.NewTerraform(workingDir, execPath)
+	if err != nil {
+		fmt.Printf("error running NewTerraform: %s (execPath: %s)", err, execPath)
+		return err
+	}
+
+	err = tf.Init(context.Background())
+	if err != nil {
+		fmt.Printf("error running Init: %s", err)
+		return err
+	}
+
+	// Convert map to slice of keys.
+	var tfvars = []tfexec.PlanOption{tfexec.Out(workingDir + "/out.plan")}
+	for key, val := range vars {
+		tfvars = append(tfvars, tfexec.Var(key+"="+val))
+	}
+
+	pass, err := tf.Plan(context.Background(), tfvars...)
+	if err != nil {
+		fmt.Printf("error running Plan: %s", err)
+		return err
+	}
+
+	if pass {
+		plan, err := tf.ShowPlanFile(context.Background(), workingDir+"/out.plan")
+		if err != nil {
+			fmt.Printf("error running fetch plan: %s", err)
+			return err
+		}
+
+		for _, s := range plan.ResourceChanges {
+			fmt.Printf("Change: %s %s\n", s.Change.Actions, s.Name)
+		}
+
+		fmt.Println("Applying changes")
+		err2 := tf.Apply(context.Background(), tfexec.DirOrPlan(workingDir+"/out.plan"))
+
+		if err2 != nil {
+			fmt.Printf("error running apply: %s", err2)
+			return err2
+		}
+
+		os.Remove(workingDir + "/out.plan")
+	}
+
+	return nil
+}
+
+func runDestroyTerraform(workingDir string, vars map[string]string) error {
+	execPath := getTerraformDir()
+
+	tf, err := tfexec.NewTerraform(workingDir, execPath)
+	if err != nil {
+		fmt.Printf("error running NewTerraform: %s (execPath: %s)", err, execPath)
+		return err
+	}
+
+	err = tf.Init(context.Background())
+	if err != nil {
+		fmt.Printf("error running Init: %s", err)
+		return err
+	}
+
+	// Convert map to slice of keys.
+	var tfvars = []tfexec.DestroyOption{}
+	for key, val := range vars {
+		tfvars = append(tfvars, tfexec.Var(key+"="+val))
+	}
+
+	fmt.Println("Destroying changes")
+	err = tf.Destroy(context.Background(), tfvars...)
+	if err != nil {
+		fmt.Printf("error running destroy: %s", err)
+		return err
+	}
+
+	return nil
+}
+
+func ExecuteTerraform(workingDir string, vars map[string]string, action TerraformAction) error {
+	switch action {
+	case PlanAction:
+		return nil
+	case ApplyAction:
+		return runApplyTerraform(workingDir, vars)
+	case DestroyAction:
+		return runDestroyTerraform(workingDir, vars)
+	}
+
+	return nil
 }
