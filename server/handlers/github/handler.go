@@ -133,8 +133,6 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 	})
 	common.CheckIfError(err)
 
-	//repoName := strings.ReplaceAll(strings.ToLower(appName), " ", "-")
-
 	_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
 		URL:      repoUrl,
 		Progress: os.Stdout,

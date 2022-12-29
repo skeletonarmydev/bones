@@ -19,6 +19,8 @@ type GithubCreds struct {
 
 func CreateProject(name string, skeletonRepo string, skeletonRepoPath string) error {
 
+	fmt.Printf("Creating CircleCI project for app: %s\n", name)
+
 	skeletonDir := github.DownloadRepo(skeletonRepo)
 	defer os.RemoveAll(skeletonDir)
 
@@ -41,6 +43,9 @@ func CreateProject(name string, skeletonRepo string, skeletonRepoPath string) er
 	vars["circleci_token"] = circleCreds.TOKEN
 
 	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, projectName+"/infra/circleci")
+
+	fmt.Printf("Finished creating CircleCI project for app: %s\n", name)
+
 	return err
 }
 

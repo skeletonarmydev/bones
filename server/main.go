@@ -9,6 +9,7 @@ import (
 	github "github.com/bones/server/handlers/github"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"gopkg.in/yaml.v3"
 	"log"
 	"net/http"
 	"os"
@@ -63,14 +64,36 @@ type ProjectTypeDeleteRequest struct {
 	Slug string `json:"slug"`
 }
 
+// Note: struct fields must be public in order for unmarshal to
+// correctly populate the data.
+
+type GenerateStep struct {
+	Name    string
+	Handler string
+	Path    string
+}
+
+type SkeletonYaml struct {
+	Generate struct {
+		Steps []GenerateStep
+	}
+}
+
 // Globals
 var Projects = make(map[string]Project)
 var ProjectTypes = make(map[string]ProjectType)
+var SkeletonYAML = SkeletonYaml{}
 
 func returnAllProjects(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: returnAllProjects")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(Projects)
+}
+
+func processGenerateSteps(step GenerateStep) error {
+	fmt.Printf("Running step: %s\n", step.Name)
+
+	return nil
 }
 
 func createNewProject(w http.ResponseWriter, r *http.Request) {
@@ -97,13 +120,50 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 	project.Desc = projectRequest.Desc
 
 	go func() {
-		repoUrl := github.CreateRepo(project.Name, projectType.Repo, projectType.Path)
 
-		project.Repo = repoUrl
-		Projects[id.String()] = project
+		skeletonDir := github.DownloadRepo(projectType.Repo)
+		defer os.RemoveAll(skeletonDir)
 
-		aws.CreateAWSInfra(project.Name, projectType.Repo, projectType.Path)
-		circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
+		//get bones manifest
+		skeletonyaml, err := os.ReadFile(skeletonDir + projectType.Path + "/.skeleton/skeleton.yaml")
+		if err != nil {
+			http.Error(w, "Project configuration not found (skeleton.yaml missing!)", http.StatusFailedDependency)
+			log.Print(err)
+			return
+		}
+
+		err = yaml.Unmarshal(skeletonyaml, &SkeletonYAML)
+		if err != nil {
+			http.Error(w, "Project configuration not formatted correctly (skeleton.yaml corrupted!)", http.StatusBadRequest)
+			log.Print(err)
+			return
+		}
+
+		/*
+
+			//Show the bones yaml
+			d, err := yaml.Marshal(&BonesYAML)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+			fmt.Printf("--- bones yaml dump:\n%s\n\n", string(d))
+		*/
+
+		//fmt.Printf("Finished create repo (%s) for app: %s\n", repoUrl, project.Name)
+
+		//project.Repo = repoUrl
+
+		for _, s := range SkeletonYAML.Generate.Steps {
+			processGenerateSteps(s)
+		}
+
+		/*
+			    fmt.Printf("Creating repo for app: %s\n", project.Name)
+				repoUrl := github.CreateRepo(project.Name, projectType.Repo, projectType.Path)
+				aws.CreateAWSInfra(project.Name, projectType.Repo, projectType.Path)
+				circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
+		*/
+
 	}()
 
 	Projects[id.String()] = project
@@ -146,13 +206,11 @@ func deleteProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func returnAllProjectTypes(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllProjectTypes")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ProjectTypes)
 }
 
 func returnHealth(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnHealth")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode("Alive")
 }

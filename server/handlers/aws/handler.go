@@ -17,6 +17,8 @@ type AWSCreds struct {
 
 func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) error {
 
+	fmt.Printf("Creating AWS Infra for app: %s\n", name)
+
 	skeletonDir := github.DownloadRepo(skeletonRepo)
 	defer os.RemoveAll(skeletonDir)
 
@@ -42,6 +44,8 @@ func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) e
 	vars["aws_secret_key"] = awsCreds.AWS_SECRET_KEY
 
 	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, appName+"/infra/aws-ecs")
+
+	fmt.Printf("Finished creating AWS Infra for app: %s\n", name)
 
 	return err
 }
