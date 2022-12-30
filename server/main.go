@@ -28,11 +28,12 @@ Your skeleton army scaffolding service
 `
 
 type Project struct {
-	Id   string `json:"Id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
-	Desc string `json:"desc"`
-	Repo string `json:"repo"`
+	Id   string            `json:"Id"`
+	Name string            `json:"name"`
+	Type string            `json:"type"`
+	Desc string            `json:"desc"`
+	Repo string            `json:"repo"`
+	Data map[string]string `json:"data""`
 }
 
 type ProjectType struct {
@@ -44,9 +45,10 @@ type ProjectType struct {
 }
 
 type ProjectCreateRequest struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	Desc string `json:"desc"`
+	Type string            `json:"type"`
+	Name string            `json:"name"`
+	Desc string            `json:"desc"`
+	Data map[string]string `json:"data""`
 }
 
 type ProjectDeleteRequest struct {
@@ -71,16 +73,27 @@ type GenerateStep struct {
 	Name    string
 	Handler string
 	Path    string
+	Cmd     string
+}
+
+type DestroyStep struct {
+	Name    string
+	Handler string
+	Path    string
+	Cmd     string
 }
 
 type SkeletonYaml struct {
 	Generate struct {
 		Steps []GenerateStep
 	}
+	Destroy struct {
+		Steps []DestroyStep
+	}
 }
 
 // Globals
-var Projects = make(map[string]Project)
+var Projects = make(map[string]*Project)
 var ProjectTypes = make(map[string]ProjectType)
 var SkeletonYAML = SkeletonYaml{}
 
@@ -90,8 +103,34 @@ func returnAllProjects(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Projects)
 }
 
-func processGenerateSteps(step GenerateStep) error {
+func processGenerateSteps(step GenerateStep, project *Project, projectType ProjectType) error {
 	fmt.Printf("Running step: %s\n", step.Name)
+
+	switch step.Handler {
+	case "github":
+		project.Repo = github.CreateRepo(project.Name, projectType.Repo, projectType.Path, project.Data)
+		return nil
+	case "aws":
+		return aws.CreateAWSInfra(project.Name, project.Repo, projectType.Repo, projectType.Path, project.Data)
+	case "circleci":
+		return circleci.CreateProject(project.Name, project.Repo, projectType.Repo, projectType.Path, project.Data)
+	}
+
+	return nil
+}
+
+func processDestroySteps(step DestroyStep, project *Project) error {
+	fmt.Printf("Running step: %s\n", step.Name)
+
+	switch step.Handler {
+	case "github":
+		github.DestroyRepo(project.Repo)
+		return nil
+	case "aws":
+		return aws.DestroyAWSInfra(project.Name, project.Repo)
+	case "circleci":
+		return circleci.DestroyProject(project.Name, project.Repo)
+	}
 
 	return nil
 }
@@ -118,6 +157,7 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 	project.Name = projectRequest.Name
 	project.Type = projectRequest.Type
 	project.Desc = projectRequest.Desc
+	project.Data = projectRequest.Data
 
 	go func() {
 
@@ -139,34 +179,18 @@ func createNewProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		/*
-
-			//Show the bones yaml
-			d, err := yaml.Marshal(&BonesYAML)
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-			fmt.Printf("--- bones yaml dump:\n%s\n\n", string(d))
-		*/
-
-		//fmt.Printf("Finished create repo (%s) for app: %s\n", repoUrl, project.Name)
-
-		//project.Repo = repoUrl
+		//Setting standard values
+		slug := strings.ReplaceAll(strings.ToLower(project.Name), " ", "-")
+		project.Data["APP_NAME"] = slug
+		project.Data["SERVICE_NAME"] = slug + "-service"
 
 		for _, s := range SkeletonYAML.Generate.Steps {
-			processGenerateSteps(s)
+			processGenerateSteps(s, &project, projectType)
 		}
-
-		/*
-			    fmt.Printf("Creating repo for app: %s\n", project.Name)
-				repoUrl := github.CreateRepo(project.Name, projectType.Repo, projectType.Path)
-				aws.CreateAWSInfra(project.Name, projectType.Repo, projectType.Path)
-				circleci.CreateProject(project.Name, projectType.Repo, projectType.Path)
-		*/
 
 	}()
 
-	Projects[id.String()] = project
+	Projects[id.String()] = &project
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(project)
@@ -187,16 +211,29 @@ func deleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectType, ok := ProjectTypes[project.Type]
-	if !ok {
-		http.Error(w, "Project Type Not Found", http.StatusNotFound)
-		return
-	}
-
 	go func() {
-		circleci.DestroyProject(project.Name, projectType.Repo, projectType.Path)
-		aws.DestroyAWSInfra(project.Name, projectType.Repo, projectType.Path)
-		github.DestroyRepo(project.Name)
+		projectDir := github.DownloadRepo(project.Repo)
+		defer os.RemoveAll(projectDir)
+
+		//get bones manifest
+		skeletonyaml, err := os.ReadFile(projectDir + "/.skeleton/skeleton.yaml")
+		if err != nil {
+			http.Error(w, "Project configuration not found (skeleton.yaml missing!)", http.StatusFailedDependency)
+			log.Print(err)
+			return
+		}
+
+		err = yaml.Unmarshal(skeletonyaml, &SkeletonYAML)
+		if err != nil {
+			http.Error(w, "Project configuration not formatted correctly (skeleton.yaml corrupted!)", http.StatusBadRequest)
+			log.Print(err)
+			return
+		}
+
+		for _, s := range SkeletonYAML.Destroy.Steps {
+			processDestroySteps(s, project)
+		}
+
 	}()
 
 	delete(Projects, projectRequest.Id)

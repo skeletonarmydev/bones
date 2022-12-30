@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/bones/server/common"
 	github "github.com/bones/server/handlers/github"
 	"os"
+	"path/filepath"
 	"strings"
+	"text/template"
 )
 
 type AWSCreds struct {
@@ -15,7 +18,7 @@ type AWSCreds struct {
 	AWS_SECRET_KEY string
 }
 
-func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) error {
+func CreateAWSInfra(name string, repo string, skeletonRepo string, skeletonRepoPath string, data map[string]string) error {
 
 	fmt.Printf("Creating AWS Infra for app: %s\n", name)
 
@@ -33,29 +36,57 @@ func CreateAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) e
 		return err
 	}
 
-	appName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	fmt.Printf("Create AWS Infra: %s\n", appName)
+	fmt.Printf("Create AWS Infra: %s\n", data["APP_NAME"])
 
 	vars := make(map[string]string)
 	vars["vpc_id"] = "vpc-c92c8baf"
-	//vars["app_name"] = appName
 	vars["aws_region"] = awsCreds.AWS_REGION
 	vars["aws_access_key"] = awsCreds.AWS_ACCESS_KEY
 	vars["aws_secret_key"] = awsCreds.AWS_SECRET_KEY
 
-	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, appName+"/infra/aws-ecs")
+	//Process template
+	var files = []github.RemoteFile{}
+
+	err = filepath.Walk(workingDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if !info.IsDir() {
+				tmpl, err := template.ParseFiles(path)
+				common.CheckIfError(err)
+				buf := &bytes.Buffer{}
+				err = tmpl.Execute(buf, data)
+
+				files = append(files, github.RemoteFile{
+					Name: info.Name(),
+					Path: "infra/aws-ecs",
+					Data: buf.Bytes(),
+					Perm: 0750,
+				})
+
+				os.WriteFile(path, buf.Bytes(), 0750)
+			}
+
+			return nil
+		})
+
+	github.AddFilesToRepo(repo, "Process AWS Terraform file", files)
+
+	err = common.ExecuteTerraform(workingDir, vars, common.ApplyAction, data["APP_NAME"]+"/infra/aws-ecs")
 
 	fmt.Printf("Finished creating AWS Infra for app: %s\n", name)
 
 	return err
 }
 
-func DestroyAWSInfra(name string, skeletonRepo string, skeletonRepoPath string) error {
+func DestroyAWSInfra(name string, repo string) error {
 
-	skeletonDir := github.DownloadRepo(skeletonRepo)
-	defer os.RemoveAll(skeletonDir)
+	projectDir := github.DownloadRepo(repo)
+	defer os.RemoveAll(projectDir)
 
-	workingDir := skeletonDir + skeletonRepoPath + "/infra/aws-ecs"
+	workingDir := projectDir + "/infra/aws-ecs"
 
 	awsCredsEnv := common.GetConfig("AWS")
 

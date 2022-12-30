@@ -23,6 +23,13 @@ type GithubCreds struct {
 	GITHUB_BASE  string
 }
 
+type RemoteFile struct {
+	Name string
+	Path string
+	Data []byte
+	Perm os.FileMode
+}
+
 func getWorkingDir() string {
 
 	if common.GetConfig("SA_LOCAL") == "true" {
@@ -58,26 +65,6 @@ func createRepo(name string) string {
 	return repoName
 }
 
-func destroyRepo(name string) {
-	githubCredsEnv := os.Getenv("GITHUB")
-
-	var githubCreds GithubCreds
-	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
-	if err != nil {
-		log.Fatalf("Can't parse github environment: %s", err)
-	}
-
-	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-
-	vars := make(map[string]string)
-	vars["repo_name"] = repoName
-	vars["github_user"] = githubCreds.GITHUB_USER
-	vars["github_token"] = githubCreds.GITHUB_TOKEN
-
-	err = common.ExecuteTerraform(getWorkingDir(), vars, common.DestroyAction, repoName+"/infra/github")
-	common.CheckIfError(err)
-}
-
 func DownloadRepo(repo string) string {
 	githubCredsEnv := os.Getenv("GITHUB")
 
@@ -103,7 +90,70 @@ func DownloadRepo(repo string) string {
 	return tempDir
 }
 
-func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) string {
+func AddFilesToRepo(repo string, commitMessage string, files []RemoteFile) {
+	githubCredsEnv := os.Getenv("GITHUB")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
+	if err != nil {
+		log.Fatalf("Can't parse githubToken: %s", err)
+	}
+
+	repoDir, err := os.MkdirTemp("", "repo")
+	common.CheckIfError(err)
+	defer os.RemoveAll(repoDir)
+
+	_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
+		URL:      repo,
+		Progress: os.Stdout,
+		Auth: &http2.BasicAuth{
+			Username: githubCreds.GITHUB_USER,
+			Password: githubCreds.GITHUB_TOKEN,
+		},
+	})
+	common.CheckIfError(err)
+
+	r, err := git.PlainOpen(repoDir)
+	common.CheckIfError(err)
+
+	w, err := r.Worktree()
+	common.CheckIfError(err)
+
+	err = os.Chdir(repoDir)
+	common.CheckIfError(err)
+
+	for _, fl := range files {
+		err = os.MkdirAll(fl.Path, fl.Perm)
+		common.CheckIfError(err)
+
+		err = os.WriteFile(fl.Path+"/"+fl.Name, fl.Data, fl.Perm)
+		common.CheckIfError(err)
+
+		_, err = w.Add(fl.Path + "/" + fl.Name)
+		common.CheckIfError(err)
+	}
+
+	commit, err := w.Commit(commitMessage, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  githubCreds.GITHUB_USER,
+			Email: githubCreds.GITHUB_EMAIL,
+			When:  time.Now(),
+		},
+	})
+	common.CheckIfError(err)
+	obj, err := r.CommitObject(commit)
+	common.CheckIfError(err)
+
+	fmt.Println(obj)
+
+	err = r.Push(&git.PushOptions{Auth: &http2.BasicAuth{
+		Username: githubCreds.GITHUB_USER,
+		Password: githubCreds.GITHUB_TOKEN,
+	}})
+	common.CheckIfError(err)
+}
+
+func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string, data map[string]string) string {
 	githubCredsEnv := os.Getenv("GITHUB")
 
 	var githubCreds GithubCreds
@@ -194,6 +244,22 @@ func CreateRepo(appName string, skeletonRepo string, skeletonRepoPath string) st
 	return repoUrl
 }
 
-func DestroyRepo(appName string) {
-	destroyRepo(appName)
+func DestroyRepo(name string) {
+	githubCredsEnv := os.Getenv("GITHUB")
+
+	var githubCreds GithubCreds
+	err := json.Unmarshal([]byte(githubCredsEnv), &githubCreds)
+	if err != nil {
+		log.Fatalf("Can't parse github environment: %s", err)
+	}
+
+	repoName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
+
+	vars := make(map[string]string)
+	vars["repo_name"] = repoName
+	vars["github_user"] = githubCreds.GITHUB_USER
+	vars["github_token"] = githubCreds.GITHUB_TOKEN
+
+	err = common.ExecuteTerraform(getWorkingDir(), vars, common.DestroyAction, repoName+"/infra/github")
+	common.CheckIfError(err)
 }
