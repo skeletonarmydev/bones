@@ -4,8 +4,6 @@ go 1.18
 
 require (
 	github.com/bones/server/common v0.0.0
-	github.com/go-git/go-git/v5 v5.5.1
-	github.com/hashicorp/terraform-exec v0.17.3
 	github.com/bones/server/handlers/github v0.0.0
 )
 
@@ -17,7 +15,9 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg v1.5.0 // indirect
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
+	github.com/go-git/go-git/v5 v5.5.1 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
+	github.com/hashicorp/terraform-exec v0.17.3 // indirect
 	github.com/hashicorp/terraform-json v0.14.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
